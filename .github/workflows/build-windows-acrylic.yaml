@@ -1,0 +1,76 @@
+name: Build Macast Windows (Acrylic Menu)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements/common.txt
+          pip install pyinstaller "pyside6-essentials>=6.6" pillow
+
+      - name: Prepare mpv and msgfmt
+        shell: pwsh
+        run: |
+          $client = new-object System.Net.WebClient
+          $client.DownloadFile('https://github.com/xfangfang/Macast/releases/download/v0.1/mpv-0.34.0-x86_64.7z','mpv.7z')
+          7z x -obin mpv.7z *.exe
+          $client.DownloadFile('https://github.com/xfangfang/Macast/releases/download/v0.1/gettext0.21-iconv1.16-static-64.zip','gettext.zip')
+          7z x -ogettext gettext.zip bin/msgfmt.exe
+
+      - name: Download MiSans font (best effort)
+        shell: pwsh
+        run: |
+          $urls = @(
+            'https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Regular.ttf',
+            'https://unpkg.com/misans@4.1.0/lib/Normal/MiSans-Regular.ttf',
+            'https://registry.npmmirror.com/misans/4.1.0/files/lib/Normal/MiSans-Regular.ttf'
+          )
+          $ok = $false
+          foreach ($u in $urls) {
+            try {
+              Invoke-WebRequest -Uri $u -OutFile 'macast/assets/fonts/MiSans-Regular.ttf' -TimeoutSec 90
+              if ((Get-Item 'macast/assets/fonts/MiSans-Regular.ttf').Length -gt 100000) { $ok = $true; break }
+            } catch { Write-Host "download failed: $u" }
+          }
+          if (-not $ok) { Write-Host "MiSans unavailable, falling back to system fonts" }
+
+      - name: Convert icons
+        run: python tools/make_icons.py
+
+      - name: Build exe
+        shell: pwsh
+        run: |
+          Get-ChildItem i18n | ForEach-Object -Process{gettext/bin/msgfmt -o $_/LC_MESSAGES/macast.mo $_/LC_MESSAGES/macast.po;echo $_.name}
+          $VERSION=cat macast/.version
+          echo "VERSION=v${VERSION}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          pyinstaller --noconfirm -F -w --name Macast-Acrylic `
+            --additional-hooks-dir=. `
+            --add-data="macast/.version;." `
+            --add-data="macast/xml/*;macast/xml" `
+            --add-data="i18n/zh_CN/LC_MESSAGES/*.mo;i18n/zh_CN/LC_MESSAGES" `
+            --add-data="macast/assets/*;macast/assets" `
+            --add-data="macast/assets/fonts/*;macast/assets/fonts" `
+            --add-binary="bin/mpv.exe;bin" `
+            --exclude-module=tkinter `
+            --icon=macast/assets/icon.ico Macast.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Macast-Acrylic-Windows
+          path: dist/Macast-Acrylic.exe

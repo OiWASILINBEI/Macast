@@ -189,6 +189,7 @@ class Macast(App):
         self.renderer_menuitem = None
         self.protocol_menuitem = None
         self.advanced_menuitem = None
+        self.theme_menuitem = None
 
         self.plugin_manager = MacastPluginManager(
             MacastPlugin(None, format_class_name(renderer), renderer, 'darwin,win32,linux'),
@@ -200,6 +201,7 @@ class Macast(App):
         self.setting_start_at_login = None
         self.setting_check = None
         self.setting_menubar_icon = 0
+        self.setting_menu_theme = 0
         self.setting_renderer = ''
         self.setting_protocol = ''
         self.init_setting()
@@ -303,6 +305,14 @@ class Macast(App):
                                                       _("PatternDark"),
                                                   ], self.on_menubar_icon_change_click))
         self.open_config_menuitem = MenuItem(_("Open Config Directory"), self.on_open_config_click)
+        if sys.platform == 'win32':
+            self.theme_menuitem = MenuItem(_("Menu Theme"),
+                                           children=App.build_menu_item_group([
+                                               _("Follow System"),
+                                               _("Dark"),
+                                               _("Light"),
+                                           ], self.on_menu_theme_change_click))
+            self.theme_menuitem.items()[self.setting_menu_theme].checked = True
         self.advanced_menuitem = MenuItem(_("Advanced Setting"),
                                           lambda _: self.open_browser('http://127.0.0.1:{}'.format(Setting.get_port())))
         self.check_update_menuitem = MenuItem(_("Check For Updates"), self.on_check_click)
@@ -313,12 +323,14 @@ class Macast(App):
         if len(player_settings) > 0:
             player_settings.append(None)
 
+        theme_select = [self.theme_menuitem] if self.theme_menuitem else []
         return [self.version_menuitem, self.ip_menuitem] + \
                renderer_select + \
                protocol_select + \
                [None] + \
                player_settings + \
-               [self.menubar_icon_menuitem, self.auto_check_update_menuitem,
+               [self.menubar_icon_menuitem] + theme_select + \
+               [self.auto_check_update_menuitem,
                 self.open_config_menuitem, self.advanced_menuitem] + \
                platform_options + \
                [None, self.check_update_menuitem, self.about_menuitem]
@@ -327,6 +339,7 @@ class Macast(App):
         self.setting_start_at_login = Setting.get(SettingProperty.StartAtLogin, 0)
         self.setting_check = Setting.get(SettingProperty.CheckUpdate, 1)
         self.setting_menubar_icon = Setting.get(SettingProperty.MenubarIcon, 1 if sys.platform == 'darwin' else 0)
+        self.setting_menu_theme = Setting.get(SettingProperty.MenuTheme, 0)
         self.setting_renderer = Setting.get(SettingProperty.Macast_Renderer, 'MPV')
         self.setting_protocol = Setting.get(SettingProperty.Macast_Protocol, 'DLNA')
         if self.setting_check:
@@ -495,6 +508,12 @@ class Macast(App):
         icon_path = os.path.join(os.path.dirname(__file__), Macast.ICON_MAP[item.data])
         template = None if item.data == 0 else True
         self.update_icon(icon_path, template)
+
+    def on_menu_theme_change_click(self, item):
+        for i in self.theme_menuitem.items():
+            i.checked = False
+        item.checked = True
+        Setting.set(SettingProperty.MenuTheme, item.data)
 
     def quit(self, item):
         if Setting.is_service_running():

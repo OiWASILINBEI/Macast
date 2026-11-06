@@ -117,12 +117,23 @@ class App:
                                  template=self.template,
                                  quit_button=None)
             rumps.debug_mode(True)
+        elif self.platform == Platform.Win32 and self._acrylic_supported():
+            from .acrylic_menu import AcrylicTrayApp
+            self.app = AcrylicTrayApp(self.name, self.icon, self)
         else:
             self.app = pystray.Icon(self.name,
                                     Image.open(self.icon),
                                     menu=pystray.Menu(
                                         lambda:
                                         self._build_menu_pystray(self.menu)))
+    @staticmethod
+    def _acrylic_supported():
+        try:
+            import PySide6  # noqa: F401
+            return True
+        except Exception as e:
+            logger.warning("PySide6 unavailable, fallback to pystray: %s", e)
+            return False
 
     def init_platform_darwin(self):
         pass
@@ -178,6 +189,8 @@ class App:
         if self.platform == Platform.Darwin:
             self.app.template = template
             self.app.icon = self.icon
+        elif hasattr(self.app, 'set_icon'):
+            self.app.set_icon(icon)
         else:
             self.app.icon = Image.open(self.icon)
 
@@ -193,6 +206,8 @@ class App:
         if self.platform == Platform.Darwin:
             self.app.menu.clear()
             self.app.menu = self._build_menu_rumps(menu)
+        elif hasattr(self.app, 'set_icon'):
+            pass  # acrylic menu rebuilds itself on every popup
         else:
             self.app.menu = pystray.Menu(lambda: self._build_menu_pystray(menu))
 
