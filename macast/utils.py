@@ -6,14 +6,15 @@ import uuid
 import json
 import time
 import ctypes
+import socket
 import appdirs
 import logging
 import platform
 import locale
+import psutil
 import cherrypy
 import subprocess
 from enum import Enum
-import netifaces as ni
 
 if sys.platform == 'darwin':
     from AppKit import NSBundle
@@ -39,6 +40,7 @@ class SettingProperty(Enum):
     Macast_Protocol = 7
     Blocked_Interfaces = 8
     Additional_Interfaces = 9
+    MenuTheme = 10          # Macast-Glass: auto / dark / light
 
 
 class Setting:
@@ -47,7 +49,7 @@ class Setting:
     setting_path = os.path.join(SETTING_DIR, "macast_setting.json")
     last_ip = None
     base_path = None
-    friendly_name = "Macast({})".format(platform.node())
+    friendly_name = "Macast-Glass({})".format(platform.node())
     temp_friendly_name = None
     mpv_default_path = 'mpv'
 
@@ -104,6 +106,8 @@ class Setting:
     def get_version():
         """Get application version
         """
+        if Setting.version is None:
+            Setting.load()
         return Setting.version
 
     @staticmethod
@@ -141,32 +145,80 @@ class Setting:
         return False
 
     @staticmethod
+    def peek_ip():
+        """只计算当前 IP，不写回 Setting.last_ip。
+
+        菜单每次弹出都会读一次 IP，如果直接用 get_ip()，
+        会把 last_ip 提前刷掉，SSDP 就检测不到 IP 变化了。
+        """
+        return Setting._compute_ip()
+
+    @staticmethod
     def get_ip():
-        last_ip = []
-        gateways = ni.gateways()  # {type: [{ip, interface, default},{},...], type: []}
-        interfaces = set(Setting.get(SettingProperty.Additional_Interfaces, []))
-        interface_type = [ni.AF_INET, ni.AF_LINK]
-        for t in interface_type:
-            if t in gateways:
-                for i in gateways[t]:
-                    if len(i) > 1:
-                        interfaces.add(i[1])
-        for i in Setting.get(SettingProperty.Blocked_Interfaces, []):
-            if i in interfaces:
-                interfaces.remove(i)
-        logger.debug(interfaces)
-        for i in interfaces:
+        last_ip = Setting._compute_ip()
+        Setting.last_ip = last_ip
+        return last_ip
+
+    @staticmethod
+    def _compute_ip():
+        """枚举本机 IPv4 地址与子网掩码。
+
+        原实现依赖 netifaces，但它在 Python 3.13 上没有预编译包，
+        安装需要 Microsoft C++ 编译器。改用 psutil。
+
+        关键：原版只取「有默认网关」的网卡（netifaces.gateways()），
+        所以 WSL / Hyper-V / VMware 这些虚拟网卡不会出现在菜单里。
+        psutil 拿不到路由表，这里用「连公网地址时系统选的那块网卡」
+        反推主网卡，只保留这一块，避免 172.30.x.x 之类的虚拟地址混进来。
+        """
+        try:
+            addrs = psutil.net_if_addrs()
+            stats = psutil.net_if_stats()
+        except Exception as e:
+            logger.error("get_ip failed: {}".format(e))
+            return Setting.last_ip or set()
+
+        blocked = set(Setting.get(SettingProperty.Blocked_Interfaces, []))
+
+        # 默认出口 IP：connect UDP 不会真的发包，只让系统选路
+        primary = None
+        try:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.settimeout(0.2)
+            probe.connect(('8.8.8.8', 80))
+            primary = probe.getsockname()[0]
+        except Exception:
+            primary = None
+        finally:
             try:
-                iface = ni.ifaddresses(i)
-            except ValueError as e:
+                probe.close()
+            except Exception:
+                pass
+
+        candidates = []
+        for name, snics in addrs.items():
+            if name in blocked:
                 continue
-            if ni.AF_INET in iface:
-                for j in iface[ni.AF_INET]:
-                    if 'addr' in j and 'netmask' in j:
-                        last_ip.append((j['addr'], j['netmask']))
-        Setting.last_ip = set(last_ip)
-        logger.debug(Setting.last_ip)
-        return Setting.last_ip
+            st = stats.get(name)
+            if st is not None and not st.isup:
+                continue
+            for snic in snics:
+                if snic.family != socket.AF_INET:
+                    continue
+                addr = snic.address or ''
+                if not addr or addr.startswith('127.'):
+                    continue
+                candidates.append((addr, snic.netmask or '255.255.255.0'))
+
+        if primary:
+            hit = [c for c in candidates if c[0] == primary]
+            last_ip = hit or [(primary, '255.255.255.0')]
+        else:
+            last_ip = candidates
+
+        result = set(last_ip)
+        logger.debug(result)
+        return result
 
     @staticmethod
     def get_port():
