@@ -1,16 +1,21 @@
 # Copyright (c) 2021 by xfangfang. All Rights Reserved.
+# Modifications for Macast-Glass:
+#   Windows 分支改为 Qt 自绘托盘菜单（glass_menu.GlassTray），
+#   以获得系统级亚克力模糊。macOS(rumps) 与 Linux(pystray) 分支保持不变。
 
 import sys
 import logging
 import subprocess
+import webbrowser
 from enum import Enum
 from .utils import Setting
 
 if sys.platform == 'darwin':
     import rumps
+elif sys.platform == 'win32':
+    from .glass_menu import GlassTray
 else:
     import pystray
-    import webbrowser
     from PIL import Image
 
 logger = logging.getLogger("gui")
@@ -77,7 +82,6 @@ class MenuItem:
         if self.view is None:
             return
         if self.platform == Platform.Darwin:
-            state = 1 if self._checked else 0
             self.view.set_callback(
                 self._rumpsCallback if self._enabled else None,
                 self.key)
@@ -117,6 +121,9 @@ class App:
                                  template=self.template,
                                  quit_button=None)
             rumps.debug_mode(True)
+        elif self.platform == Platform.Win32:
+            # Qt 自绘菜单：每次弹出时向子类要一次最新的菜单树
+            self.app = GlassTray(self.name, self.icon, self._menu_for_tray)
         else:
             self.app = pystray.Icon(self.name,
                                     Image.open(self.icon),
@@ -126,6 +133,10 @@ class App:
 
     def init_platform_darwin(self):
         pass
+
+    def _menu_for_tray(self):
+        """Windows 托盘每次弹出前调用。子类可覆盖以刷新动态内容。"""
+        return self.menu
 
     def init_platform_win32(self):
         pass
@@ -178,6 +189,8 @@ class App:
         if self.platform == Platform.Darwin:
             self.app.template = template
             self.app.icon = self.icon
+        elif self.platform == Platform.Win32:
+            self.app.set_icon(self.icon)
         else:
             self.app.icon = Image.open(self.icon)
 
@@ -185,7 +198,7 @@ class App:
         """ refresh current menu
             only windows and linux needed
         """
-        if self.platform != Platform.Darwin:
+        if self.platform == Platform.Others:
             self.app.update_menu()
 
     def set_menu(self, menu):
@@ -193,13 +206,16 @@ class App:
         if self.platform == Platform.Darwin:
             self.app.menu.clear()
             self.app.menu = self._build_menu_rumps(menu)
+        elif self.platform == Platform.Win32:
+            # 自绘菜单每次弹出时重建，这里无需动作
+            pass
         else:
             self.app.menu = pystray.Menu(lambda: self._build_menu_pystray(menu))
 
     def _find_menu_item_index_by_id(self, id):
         #  TODO find all items
         for i, item in enumerate(self.menu):
-            if item.id is not None and item.id == id:
+            if item is not None and item.id is not None and item.id == id:
                 return i
         logger.error("Canot find id:{}.".format(id))
         return -1
@@ -209,10 +225,9 @@ class App:
             self.app.menu.insert_after(id, self._build_menu_item_rumps(menu_item))
         else:
             index = self._find_menu_item_index_by_id(id)
-            print("index: ", index)
             if index != -1:
                 self.menu.insert(index + 1, menu_item)
-                self.app.update_menu()
+                self.update_menu()
 
     def append_menu_item_before(self, id, menu_item):
         if self.platform == Platform.Darwin:
@@ -221,7 +236,7 @@ class App:
             index = self._find_menu_item_index_by_id(id)
             if index != -1:
                 self.menu.insert(index, menu_item)
-                self.app.update_menu()
+                self.update_menu()
 
     def remove_menu_item_by_id(self, id):
         if self.platform == Platform.Darwin:
@@ -231,14 +246,18 @@ class App:
             index = self._find_menu_item_index_by_id(id)
             if index != -1:
                 self.menu.pop(index)
-                self.app.update_menu()
+                self.update_menu()
 
     def start(self):
+        if self.platform == Platform.Win32:
+            return self.app.exec_()
         self.app.run()
 
     def quit(self, _):
         if self.platform == Platform.Darwin:
             rumps.quit_application()
+        elif self.platform == Platform.Win32:
+            self.app.stop()
         else:
             try:
                 self.app.remove_notification()
@@ -255,6 +274,8 @@ class App:
     def notification(self, title, content, sound=True):
         if self.platform == Platform.Darwin:
             rumps.notification(title, "", content, sound=sound)
+        elif self.platform == Platform.Win32:
+            self.app.notify(title, content)
         else:
             try:
                 self.app.notify(message=content, title=title)
@@ -310,55 +331,11 @@ class App:
 
     @staticmethod
     def build_menu_item_group(titles, callback):
+        """批量创建单选组。checked 必须显式给 False——
+        否则为 None 时会被当成「无状态命令项」，点一下就关菜单，
+        没法连续切换。"""
         items = []
         for index, title in enumerate(titles):
-            item = MenuItem(title, callback, data=index)
+            item = MenuItem(title, callback, data=index, checked=False)
             items.append(item)
         return items
-
-
-if __name__ == '__main__':
-    class DemoApp(App):
-        def __init__(self):
-            super(DemoApp, self).__init__("Macast",
-                                          "assets/menu_light.png",
-                                          [MenuItem("Add",
-                                                    self.add,
-                                                    data=1,
-                                                    key="a"),
-                                           MenuItem("Remove",
-                                                    self.remove,
-                                                    data=1,
-                                                    key="b"),
-                                           MenuItem("Quit", self.quit)])
-
-        def test_call(self, item):
-            print("testCall: ", item)
-            item.text = "123"
-
-        def remove(self, item):
-            menu = [MenuItem("Add",
-                             self.add,
-                             data=1,
-                             key="a"),
-                    MenuItem("Remove",
-                             self.remove,
-                             data=1,
-                             key="r"),
-                    MenuItem("Quit", self.quit)]
-            self.set_menu(menu)
-
-        def add(self, item):
-            print("add", item.data)
-            item = MenuItem("Test", None, children=[
-                MenuItem("Test1", self.test_call, data=1),
-                None,
-                MenuItem("Test2", self.test_call, data=2),
-                MenuItem("Test3", self.test_call, data=3),
-            ])
-            self.append_menu_item_after("Add", item)
-
-        def quit(self, _):
-            super(DemoApp, self).quit(_)
-
-    DemoApp().start()
