@@ -5,6 +5,7 @@ import re
 import sys
 import time
 import json
+import platform
 import cherrypy
 import logging
 import threading
@@ -189,6 +190,7 @@ class Macast(App):
         self.renderer_menuitem = None
         self.protocol_menuitem = None
         self.advanced_menuitem = None
+        self.menu_theme_menuitem = None
 
         self.plugin_manager = MacastPluginManager(
             MacastPlugin(None, format_class_name(renderer), renderer, 'darwin,win32,linux'),
@@ -211,7 +213,14 @@ class Macast(App):
         icon_path = os.path.join(os.path.dirname(__file__), Macast.ICON_MAP[self.setting_menubar_icon])
         template = None if self.setting_menubar_icon == 0 else True
         self.copy_menuitem = None
-        super(Macast, self).__init__("Macast",
+        # 源码运行时 sys.executable 是 python.exe，写注册表自启没有意义，
+        # 所以只在打包后真正启用；这里记下来给菜单和点击回调用
+        self.is_source_run = (sys.platform == 'win32' and
+                             "python" in os.path.basename(sys.executable).lower())
+        # 协议/播放器切换是耗时操作，连点两次会让 stop/start 交错，
+        # 用一把锁把切换串行化，最终状态以最后一次选择为准
+        self._switch_lock = threading.Lock()
+        super(Macast, self).__init__("Macast-Glass",
                                      icon_path,
                                      self.build_app_menu(),
                                      template
@@ -226,23 +235,32 @@ class Macast(App):
         self.start_cast()
         logger.debug("Macast APP started")
 
+    @staticmethod
+    def menu_title():
+        """菜单标题：电脑名 - 软件名 v版本号"""
+        return "{} - {} v{}".format(platform.node(), "Macast-Glass", Setting.get_version())
+
     def build_app_menu(self):
+        # Macast-Glass：设备名 + IP 提到根菜单当标题区（效果稿结构），
+        # 原版是塞在「设置」子菜单最上面两项。
+        ip_text = "/".join([ip for ip, _ in Setting.peek_ip()])
+        port = Setting.get_port()
+        self.version_menuitem = MenuItem(self.menu_title(), enabled=False)
+        self.ip_menuitem = MenuItem("{}:{}".format(ip_text, port), enabled=False)
+
         self.toggle_menuitem = MenuItem(_("Stop Cast"), self.on_toggle_service_click, key="p")
         self.setting_menuitem = MenuItem(_("Setting"), children=self.build_setting_menu())
         self.quit_menuitem = MenuItem(_("Quit"), self.quit, key="q")
         return [
-            self.toggle_menuitem,
+            self.version_menuitem,
+            self.ip_menuitem,
             None,
+            self.toggle_menuitem,
             self.setting_menuitem,
             self.quit_menuitem
         ]
 
     def build_setting_menu(self):
-        ip_text = "/".join([ip for ip, _ in Setting.get_ip()])
-        port = Setting.get_port()
-        self.ip_menuitem = MenuItem("{}:{}".format(ip_text, port), enabled=False)
-        self.version_menuitem = MenuItem(
-            "{} v{}".format(Setting.get_friendly_name(), Setting.get_version()), enabled=False)
         self.auto_check_update_menuitem = MenuItem(_("Auto Check Updates"),
                                                    self.on_auto_check_update_click,
                                                    checked=self.setting_check)
@@ -286,9 +304,10 @@ class Macast(App):
             # Reset StartAtLogin to prevent the user from turning off
             # this option from the system settings
             Setting.set_start_at_login(self.setting_start_at_login)
-        elif sys.platform == 'win32' and "python" not in os.path.basename(sys.executable).lower():
+        elif sys.platform == 'win32':
             platform_options = [self.start_at_login_menuitem]
-            Setting.set_start_at_login(self.setting_start_at_login)
+            if not self.is_source_run:
+                Setting.set_start_at_login(self.setting_start_at_login)
         if sys.platform == 'darwin':
             self.menubar_icon_menuitem = MenuItem(_("Menubar Icon"),
                                                   children=App.build_menu_item_group([
@@ -302,6 +321,22 @@ class Macast(App):
                                                       _("PatternLight"),
                                                       _("PatternDark"),
                                                   ], self.on_menubar_icon_change_click))
+        # Macast-Glass：菜单主题（仅 Windows，Qt 自绘菜单才有意义）
+        menu_theme_select = []
+        if sys.platform == 'win32':
+            self.menu_theme_menuitem = MenuItem(
+                _("Menu Theme"),
+                children=App.build_menu_item_group(
+                    [_("Follow System"), _("Dark"), _("Light")],
+                    self.on_menu_theme_change_click))
+            try:
+                from .glass_menu import get_theme_mode
+                idx = {"auto": 0, "dark": 1, "light": 2}.get(get_theme_mode(), 0)
+                self.menu_theme_menuitem.children[idx].checked = True
+            except Exception as e:
+                logger.error(e)
+            menu_theme_select = [self.menu_theme_menuitem]
+
         self.open_config_menuitem = MenuItem(_("Open Config Directory"), self.on_open_config_click)
         self.advanced_menuitem = MenuItem(_("Advanced Setting"),
                                           lambda _: self.open_browser('http://127.0.0.1:{}'.format(Setting.get_port())))
@@ -313,12 +348,13 @@ class Macast(App):
         if len(player_settings) > 0:
             player_settings.append(None)
 
-        return [self.version_menuitem, self.ip_menuitem] + \
-               renderer_select + \
+        return renderer_select + \
                protocol_select + \
                [None] + \
                player_settings + \
-               [self.menubar_icon_menuitem, self.auto_check_update_menuitem,
+               [self.menubar_icon_menuitem] + \
+               menu_theme_select + \
+               [None, self.auto_check_update_menuitem,
                 self.open_config_menuitem, self.advanced_menuitem] + \
                platform_options + \
                [None, self.check_update_menuitem, self.about_menuitem]
@@ -405,10 +441,10 @@ class Macast(App):
         """
         logger.info("ssdp_update_ip")
         if self.ip_menuitem is not None:
-            ip_text = "/".join([ip for ip, _ in Setting.get_ip()])
+            ip_text = "/".join([ip for ip, _ in Setting.peek_ip()])
             port = Setting.get_port()
             self.ip_menuitem.text = "{}:{}".format(ip_text, port)
-        self.version_menuitem.text = "{} v{}".format(Setting.get_friendly_name(), Setting.get_version())
+        self.version_menuitem.text = self.menu_title()
         self.update_menu()
 
     def renderer_av_stop(self):
@@ -435,26 +471,61 @@ class Macast(App):
 
     def on_protocol_change_click(self, item):
         protocol_config = self.plugin_manager.protocol_list[item.data]
-        self.stop_cast()
-        # todo 生成新的 uuid
-        self.service.protocol = protocol_config.get_instance()
         Setting.set(SettingProperty.Macast_Protocol, protocol_config.title)
         self.setting_protocol = protocol_config.title
-        self.setting_menuitem.children = self.build_setting_menu()
-        # reload menu
-        self.set_menu(self.menu)
-        self.start_cast()
-        cherrypy.engine.publish('app_notify', _('Info'), _('Change Protocol to {}.').format(protocol_config.title))
+        # 先刷勾选，服务启停丢后台——stop/start 是阻塞的，压在界面线程上
+        # 会卡两三秒，表现成「点了没反应」
+        if self.protocol_menuitem is not None:
+            for i in self.protocol_menuitem.items():
+                i.checked = False
+        item.checked = True
+        threading.Thread(target=self._apply_protocol,
+                         args=(protocol_config,),
+                         daemon=True,
+                         name="PROTOCOL_SWITCH").start()
+
+    def _apply_protocol(self, protocol_config):
+        with self._switch_lock:
+            self._do_apply_protocol(protocol_config)
+
+    def _do_apply_protocol(self, protocol_config):
+        try:
+            self.stop_cast()
+            # todo 生成新的 uuid
+            self.service.protocol = protocol_config.get_instance()
+            self.start_cast()
+            cherrypy.engine.publish(
+                'app_notify', _('Info'),
+                _('Change Protocol to {}.').format(protocol_config.title))
+        except Exception as e:
+            logger.error("apply protocol failed: {}".format(e))
 
     def on_renderer_change_click(self, item):
         renderer_config = self.plugin_manager.renderer_list[item.data]
-        self.service.renderer = renderer_config.get_instance()
         Setting.set(SettingProperty.Macast_Renderer, renderer_config.title)
         self.setting_renderer = renderer_config.title
-        self.setting_menuitem.children = self.build_setting_menu()
-        # reload menu
-        self.set_menu(self.menu)
-        cherrypy.engine.publish('app_notify', _('Info'), _('Change Renderer to {}.').format(renderer_config.title))
+        if self.renderer_menuitem is not None:
+            for i in self.renderer_menuitem.items():
+                i.checked = False
+        item.checked = True
+        # 实例化播放器插件也不一定快，同样丢后台
+        threading.Thread(target=self._apply_renderer,
+                         args=(renderer_config,),
+                         daemon=True,
+                         name="RENDERER_SWITCH").start()
+
+    def _apply_renderer(self, renderer_config):
+        with self._switch_lock:
+            self._do_apply_renderer(renderer_config)
+
+    def _do_apply_renderer(self, renderer_config):
+        try:
+            self.service.renderer = renderer_config.get_instance()
+            cherrypy.engine.publish(
+                'app_notify', _('Info'),
+                _('Change Renderer to {}.').format(renderer_config.title))
+        except Exception as e:
+            logger.error("apply renderer failed: {}".format(e))
 
     def on_open_config_click(self, item):
         self.open_directory(SETTING_DIR)
@@ -470,6 +541,11 @@ class Macast(App):
                     1 if item.checked else 0)
 
     def on_start_at_login_click(self, item):
+        if self.is_source_run:
+            item.checked = not item.checked
+            self.notification(_("Info"),
+                              _("Source mode: this only takes effect after packaging."))
+            return
         res = Setting.set_start_at_login(not item.checked)
         if res[0] == 0:
             item.checked = not item.checked
@@ -495,6 +571,31 @@ class Macast(App):
         icon_path = os.path.join(os.path.dirname(__file__), Macast.ICON_MAP[item.data])
         template = None if item.data == 0 else True
         self.update_icon(icon_path, template)
+
+    def on_menu_theme_change_click(self, item):
+        """Macast-Glass: 切换菜单主题（跟随系统 / 深色 / 浅色）。"""
+        modes = ["auto", "dark", "light"]
+        mode = modes[item.data] if 0 <= getattr(item, "data", 0) < len(modes) else "auto"
+        try:
+            from .glass_menu import apply_theme_mode
+            apply_theme_mode(mode)
+        except Exception as e:
+            logger.error(e)
+        if self.menu_theme_menuitem is not None:
+            for i in self.menu_theme_menuitem.items():
+                i.checked = False
+        item.checked = True
+        self.update_menu()
+
+    def _menu_for_tray(self):
+        """Windows 托盘每次弹出前调用：重建设置菜单，
+        保证播放器子菜单项和各项勾选都是最新的。"""
+        try:
+            if self.setting_menuitem is not None:
+                self.setting_menuitem.children = self.build_setting_menu()
+        except Exception as e:
+            logger.error("rebuild setting menu failed: {}".format(e))
+        return self.menu
 
     def quit(self, item):
         if Setting.is_service_running():
