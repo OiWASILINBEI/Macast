@@ -3,6 +3,17 @@ cherrypy
 lxml
 pillow
 requests
-netifaces
-git+https://github.com/xfangfang/pystray.git
-git+https://github.com/xfangfang/pyperclip.git
+pyperclip
+psutil
+PySide6
+
+# Windows 额外需要（托盘图标相关的系统调用）
+# pywin32; sys_platform == "win32"
+
+# Macast-Glass 改动说明：
+#   1. 去掉 netifaces —— Python 3.13 无预编译包，需 C++ 编译器。
+#      改用 psutil 枚举网卡（见 macast/utils.py 的 get_ip）
+#   2. 去掉魔改版 pystray —— Windows 分支已换成 Qt 自绘托盘
+#      （macast/glass_menu.py）。Linux 分支仍需：
+#      git+https://github.com/xfangfang/pystray.git
+#   3. 去掉魔改版 pyperclip，用官方版即可
