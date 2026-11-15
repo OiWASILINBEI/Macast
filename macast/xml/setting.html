@@ -15,198 +15,137 @@
 <body>
 
 <div id="app">
+    <div class="macast-topbar">
+        <div class="macast-brand">Macast<span>投屏接收端 · 高级设置</span></div>
+        <div class="macast-tabs">
+            <button type="button" v-for="t in tabList" :key="t.name"
+                    :class="{ on: activeIndex === t.name }"
+                    @click="activeIndex = t.name; switch_page(t.name)">{{ t.label }}
+            </button>
+        </div>
+        <div class="macast-theme" id="theme-switch">
+            <button type="button" data-theme-value="auto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <circle cx="12" cy="12" r="8"/>
+                    <path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/>
+                </svg>
+                跟随系统
+            </button>
+            <button type="button" data-theme-value="light">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                     stroke-linecap="round">
+                    <circle cx="12" cy="12" r="4.2"/>
+                    <path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7L5.4 5.4"/>
+                </svg>
+                浅色
+            </button>
+            <button type="button" data-theme-value="dark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                     stroke-linejoin="round">
+                    <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+                </svg>
+                深色
+            </button>
+        </div>
+    </div>
     <el-tabs v-model="activeIndex" @tab-click="handleSelect">
-        <el-tab-pane label="Plugin" name="1">
+        <el-tab-pane label="插件" name="1">
             <div class="macast-plugins">
                 <macast-plugin v-for="item in plugins" :key="item.renderer"
                                :item="item" v-on:refresh_plugin="refresh_plugin">
                 </macast-plugin>
-                <p v-if="loading">loading</p>
+                <p v-if="loading">加载中…</p>
             </div>
             <a :href="this.repo_url" target="_blank">
-                <el-tooltip class="item" effect="dark" content="Find more information at plugins repo."
+                <el-tooltip class="item" effect="dark" content="在插件仓库里找更多插件"
                             placement="top-end">
                     <el-button class="macast-plugin-repo" icon="el-icon-search" circle>
                     </el-button>
                 </el-tooltip>
             </a>
         </el-tab-pane>
-        <el-tab-pane label="Setting" name="2">
-            <div>
+        <el-tab-pane label="设置" name="2">
+            <div class="macast-settings">
                 <el-input
                         type="textarea"
-                        :autosize="{ minRows: 2, maxRows: 20}"
-                        placeholder="Macast launch parameters"
+                        :rows="18"
+                        placeholder="Macast 启动参数"
                         v-model="textarea">
                 </el-input>
 
-                <el-tooltip class="item" effect="dark" content="Macast will be restarted" placement="right">
-                    <el-button :loading="connecting" :disabled="!is_json" v-on:click="save" round
-                               style="margin-top: 10px">Save
-                    </el-button>
-                </el-tooltip>
-                <p v-if="!is_json">json format error</p>
+                <div class="macast-settings-actions">
+                    <p v-if="!is_json" class="macast-json-error">JSON 格式有误</p>
+                    <el-tooltip class="item" effect="dark" content="保存后 Macast 会自动重启" placement="top">
+                        <el-button class="macast-primary" :loading="connecting" :disabled="!is_json"
+                                   v-on:click="save" round>保存
+                        </el-button>
+                    </el-tooltip>
+                </div>
             </div>
         </el-tab-pane>
-        <el-tab-pane label="Log" name="3">
-            <span>This page does not display all logs. If you want to view all logs, please run from the source code or refer to </span>
+        <el-tab-pane label="日志" name="3">
+            <span>本页不会显示全部日志。要查看完整日志，请从源码运行，或参考 </span>
             <el-link type="primary"
                      href="https://github.com/xfangfang/Macast/blob/main/.github/ISSUE_TEMPLATE/bug_report.md"
-                     target="_blank">this instruction.
+                     target="_blank">这份说明。
             </el-link>
             <br/>
             <br/>
-            <span v-html="macast_log"></span>
+            <span class="macast-log" v-html="macast_log"></span>
         </el-tab-pane>
-        <el-tab-pane label="Help" name="4">
+                <el-tab-pane label="帮助" name="4">
 
-            <h1>FAQ</h1>
+            <div class="macast-help">
+            <h1>常见问题</h1>
+            <p>Macast 启动后，任务栏会有一个小图标。手机或电脑上的 DLNA 客户端（视频 App 里的「投屏」按钮）只要和这台电脑在同一个局域网，就能搜到它，选中即可推流播放。</p>
 
-            <el-link type="primary"
-                     href="https://github.com/xfangfang/Macast/wiki/FAQ"
-                     target="_blank">This document may not be the latest
-                version. Please visit the Macast Wiki for the latest document.
-            </el-link>
-
-            <p>Macast is still in the early stage of development, so it may not be available on your device. In
-                this case, please try the
-                <el-link type="primary" href='https://github.com/xfangfang/Macast/actions'>beta version</el-link>
-                or
-                submit a
-                <el-link type="primary" href='https://github.com/xfangfang/Macast/issues/new/choose'>issue</el-link>
-                to help us do better.
-            </p>
-            <h2 id='i-dont-know-how-to-use'>I don&#39;t know how to use</h2>
-            <p>Just open this app, and a small icon will appear in the <strong>menubar</strong> /
-                <strong>taskbar</strong> / <strong>desktop panel</strong>, then you can push your media files from a
-                local DLNA client to your computer.<br/>
-            </p>
-            <h2 id='how-to-use-third-party-player-plug-inmacast--v06'>How to use third-party player plugin</h2>
-            <ol start=''>
-                <li>Download the plugin you want from
-                    <el-link type="primary" href='https://github.com/xfangfang/Macast-plugins'>
-                        xfangfang/Macast-plugins
-                    </el-link>
-                </li>
-                <li>Open the Macast, and click <code>Open Config Directory</code> in the setting menu</li>
-                <li>put <strong>[some plugin].py</strong> in renderer directory</li>
-                <li>Restart Macast and choose the plugins you want</li>
-
-            </ol>
-            <p> if you can&#39;t find any plugin you want, check
-                <el-link type="primary"
-                         href='https://github.com/xfangfang/Macast/wiki/Custom-Renderer'>here
-                </el-link>
-                to learn how to write a
-                custom renderer plug-in, and feel welcome to open a pull requests.
-            </p>
-            <h2 id='unable-to-find-macast-from-your-dlna-client'>Unable to find Macast from your DLNA client</h2>
+            <h2>搜不到这台电脑</h2>
             <ul>
-                <li>Check whether your firewall blocks Macast. <br/>A simple way to check firewall is to access the port
-                    opened by Macast from other devices (the default is 1068, and you can find in the settings menu)
-                </li>
-                <li>Check your router.<br/>You should open UPnP and close AP Isolation.</li>
-                <li>Software problems.<br/>If you are using an iOS device, please make sure that the app&#39;s
-                    permission to <strong>find and connect to devices on your local network</strong> is turned on. <br/>And
-                    on some application, you need to wait more than 30s to find Macast. Please wait patiently.
-                </li>
-                <li>UDP multicast problem.<br/>It is said that Windows and some routers will have adaptation problems,
-                    resulting in the failure of Windows to join multicast. In this case, You need to modify the windows
-                    registry to force IGMP version to v2.
-                </li>
-                <li>Multiple network cards or complex network conditions. <br/>Ensure that Macast can be used under the
-                    condition of single network card and the same LAN with your DLNA client, solutions for more complex
-                    situations are still working in progress.
-                </li>
-
+                <li><strong>防火墙</strong>：放行 Macast 用的端口（当前是 <code>29431</code>，可在「设置」里改）。</li>
+                <li><strong>路由器</strong>：开启 UPnP，关闭 AP 隔离。</li>
+                <li><strong>iOS 设备</strong>：确认 App 有「查找并连接本地网络设备」的权限。</li>
+                <li><strong>多网卡</strong>：虚拟网卡（VMware、WSL、Hyper-V）会干扰组播，建议只保留正在用的那块。</li>
+                <li><strong>UDP 组播</strong>：部分 Windows + 路由器组合需要把 IGMP 版本强制为 v2。</li>
             </ul>
-            <h2 id='crash-at-startup'>Crash at startup</h2>
-            <p> Macast opens port 1068 by default. When there is a port conflict on your computer, the application will
-                crash. Please set the application port manually.
-                , then Macast will load the ports you specify from the configuration file.</p>
-            <h2 id='unable-to-close-or-unresponsive'>Unable to close or unresponsive</h2>
-            <p> When a third-party player plug-in is used, the plug-in usually needs to open more threads or processes,
-                resulting in a non response problem when the application exits, which is usually caused by the plug-in
-                itself.</p>
-            <h2 id='where-is-the-configuration-file-located'>where is the configuration file located</h2>
-            <figure>
-                <table>
-                    <thead>
-                    <tr>
-                        <th>platform</th>
-                        <th>path</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr>
-                        <td>MacOS</td>
-                        <td><code>$HOME/Library/Application\ Support/Macast/</code></td>
-                    </tr>
-                    <tr>
-                        <td>Linux</td>
-                        <td><code>$HOME/.config/Macast</code></td>
-                    </tr>
-                    <tr>
-                        <td>Windows</td>
-                        <td><code>%HOMEPATH%\AppData\Local\xfangfang\Macast</code></td>
-                    </tr>
-                    </tbody>
-                </table>
-            </figure>
-            <h2 id='language-support'>Language support</h2>
-            <p>check the shell command in
-                <el-link type="primary" href='https://github.com/xfangfang/Macast/blob/main/docs/i18n.md'>docs/i18n.md
-                </el-link>
-                ,
-                feel free to open a pull requests.
-            </p>
-            <h2 id='how-to-set-personal-configurations-to-mpv'>How to set personal configurations to mpv</h2>
-            <p> refer to the mpv manual about how to set personal configs:
-                <el-link type="primary" href='https://mpv.io/manual/stable/#files'
-                         target='_blank' class='url'>https://mpv.io/manual/stable/#files
-                </el-link>
-            </p>
-            <p> create a configuration file at :</p>
-            <figure>
-                <table>
-                    <thead>
-                    <tr>
-                        <th>platform</th>
-                        <th>path</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr>
-                        <td>MacOS</td>
-                        <td><code>~/.config/mpv/mpv.conf</code></td>
-                    </tr>
-                    <tr>
-                        <td>Linux</td>
-                        <td><code>~/.config/mpv/mpv.conf</code></td>
-                    </tr>
-                    <tr>
-                        <td>Windows</td>
-                        <td><code>%HOMEPATH%\AppData\Roaming\mpv\mpv.conf</code></td>
-                    </tr>
-                    </tbody>
-                </table>
-            </figure>
-            <p> and put some mpv command line options into the <strong>configuration file</strong>, like:</p>
-            <pre><code>fs-screen==1
-</code></pre>
-            <p><em>this option tells mpv to fullscreen open a new video in desktop 1. more about fs-screen options:
-                <el-link type="primary"
-                         href='https://mpv.io/manual/stable/#options-fs-screen' target='_blank' class='url'>
-                    https://mpv.io/manual/stable/#options-fs-screen
-                </el-link>
-            </em>
-            </p>
-            <p> In this way, you can also modify the shortcut keys of the mpv player -- just put
-                <strong>input.conf</strong> to the same directory:
-                <el-link type="primary" href='https://mpv.io/manual/stable/#input-conf'
-                         target='_blank' class='url'>https://mpv.io/manual/stable/#input-conf
-                </el-link>
-            </p>
+
+            <h2>怎么装第三方播放器插件</h2>
+            <ol>
+                <li>从 <el-link type="primary" href='https://github.com/xfangfang/Macast-plugins' target='_blank'>xfangfang/Macast-plugins</el-link> 下载插件</li>
+                <li>右键托盘图标 → 打开配置目录</li>
+                <li>把插件 <strong>.py</strong> 放进 <code>renderer</code> 目录</li>
+                <li>重启 Macast，在「设置 → 选择播放器」里选中它</li>
+            </ol>
+            <p>找不到想要的插件？可以看<el-link type="primary" href='https://github.com/xfangfang/Macast/wiki/Custom-Renderer' target='_blank'>这里</el-link>自己写一个，欢迎提交 pull request。</p>
+
+            <h2>配置文件在哪</h2>
+            <table>
+                <thead>
+                <tr><th>系统</th><th>路径</th></tr>
+                </thead>
+                <tbody>
+                <tr><td>Windows</td><td><code>%HOMEPATH%\AppData\Local\xfangfang\Macast</code></td></tr>
+                <tr><td>macOS</td><td><code>$HOME/Library/Application Support/Macast/</code></td></tr>
+                <tr><td>Linux</td><td><code>$HOME/.config/Macast</code></td></tr>
+                </tbody>
+            </table>
+
+            <h2>给 mpv 加个人配置</h2>
+            <p>Windows 下新建 <code>%HOMEPATH%\AppData\Roaming\mpv\mpv.conf</code>，把 mpv 命令行参数写进去即可，例如：</p>
+            <pre><code>fs-screen=1</code></pre>
+            <p>快捷键放在同目录的 <strong>input.conf</strong> 里。更多参数见<el-link type="primary" href='https://mpv.io/manual/stable/#options' target='_blank'>mpv 手册</el-link>。</p>
+
+            <h2>启动就崩</h2>
+            <p>Macast 启动时会在本机开一个 HTTP 端口（当前是 <code>29431</code>）。如果这个端口已经被别的程序占用，程序会直接启动失败，表现是双击后托盘图标一闪就没，或者干脆出不来。</p>
+            <p>处理办法两种任选：<strong>关掉占用该端口的程序</strong>；或者在本页「设置」标签里把 <code>ApplicationPort</code> 改成别的值（比如 29432），保存后 Macast 会自动重启，并从这个配置文件里读取新端口。</p>
+            <p>想看具体是哪一步失败的，用命令行启动 <code>python Macast.py</code>，报错会直接打在控制台上，常见的两行是 <code>Port 29431 not free</code> 和 <code>ENGINE Serving on ...</code>。</p>
+
+            <h2>退出卡住 / 无响应</h2>
+            <p>使用第三方播放器插件时，插件通常需要额外开线程或子进程（比如拉起 mpv、PotPlayer、mpv.net）。如果这些线程在退出时没有被正确回收，就会出现「点了退出但进程还在」「界面卡住没反应」的情况，原因基本都在插件本身，而不是 Macast 主程序。</p>
+            <p>遇到这种情况：先在任务管理器里结束残留的播放器进程，再结束 Macast。如果某个插件经常这样，换回自带的 MPV 渲染器对比一下，就能确认是不是它的问题。</p>
+
+            <h2>中文翻译</h2>
+            <p>翻译文件在仓库的 <code>docs/i18n.md</code>，欢迎补充或修正。</p>
+            </div>
         </el-tab-pane>
     </el-tabs>
 
@@ -247,7 +186,7 @@
 </script>
 
 <script type="text/javascript">
-    const NotFound = {template: '<p>Page not found</p>'}
+    const NotFound = {template: '<p>页面不存在</p>'}
     Vue.component('macast-plugin', {
         template: '#plugin',
         props: ['item', 'update'],
@@ -288,6 +227,12 @@
             currentRoute: window.location.pathname,
             backend_url: '/api',
             activeIndex: '1',
+            tabList: [
+                {name: '1', label: '插件'},
+                {name: '2', label: '设置'},
+                {name: '3', label: '日志'},
+                {name: '4', label: '帮助'}
+            ],
 
             //plugin
             loading: true,
@@ -352,7 +297,7 @@
                     let logs = res.data.logs.replace(new RegExp("\n", "gm"), '<br/>')
                     this.macast_log = logs;
                 }).catch(err => {
-                    this.$message.error('Error connecting to Macast');
+                    this.$message.error('连接 Macast 失败');
                 });
             },
             async handleSelect(tab, event) {
@@ -416,7 +361,7 @@
                     return true;
                 }).catch(err => {
                     console.log(err)
-                    this.$message.error('Error connecting to Macast');
+                    this.$message.error('连接 Macast 失败');
                     return false;
                 })
             },
@@ -431,7 +376,7 @@
                     return true;
                 }).catch(err => {
                     console.log(err)
-                    this.$message.error('Error connecting to Macast');
+                    this.$message.error('连接 Macast 失败');
                     return false;
                 })
             },
@@ -444,7 +389,7 @@
                     console.log(res)
                 }).catch(err => {
                     console.log(err)
-                    this.$message.error('Error connecting to Macast');
+                    this.$message.error('连接 Macast 失败');
                 })
                 this.connecting = true;
                 this.interval_id = setInterval(
@@ -455,8 +400,8 @@
                             clearInterval(this.interval_id)
                             this.connecting = false;
                             this.$notify({
-                                title: 'Success',
-                                message: 'Macast restart',
+                                title: '成功',
+                                message: 'Macast 已重启',
                                 duration: 0
                             });
                         }
@@ -472,7 +417,7 @@
                 uploadData.append('install-plugin', JSON.stringify(data))
                 const loading = this.$loading({
                     lock: true,
-                    text: 'Installing',
+                    text: '正在安装',
                     spinner: 'el-icon-loading',
                     background: 'rgba(0, 0, 0, 0.7)'
                 });
@@ -495,7 +440,7 @@
                         }, 1000)
                 }).catch(err => {
                     console.log(err)
-                    this.$message.error('Error connecting to Macast');
+                    this.$message.error('连接 Macast 失败');
                     loading.close();
                 })
             },
@@ -517,8 +462,8 @@
                         protocol: p.protocol,
                         need_update: false, // 是否需要更新
                         plugin_type: p.default ? 'default' : 'local', // 插件类型：默认插件、本地插件（有无更新）、在线插件（是否适配当前系统）
-                        hint: 'Macast will be restarted',
-                        button_text: 'Update',
+                        hint: '安装后 Macast 会自动重启',
+                        button_text: '更新',
                         url: ''
                     }
                     this.plugins.push(data)
@@ -559,8 +504,8 @@
                             protocol: p.protocol,
                             need_update: true,
                             plugin_type: 'repo',
-                            hint: 'Macast will be restarted',
-                            button_text: 'Install',
+                            hint: '安装后 Macast 会自动重启',
+                            button_text: '安装',
                             url: p.url
                         }
                         this.plugins.push(data)
@@ -571,92 +516,504 @@
     })
 </script>
 
-<style lang="scss">
+<style>
 
-    body {
-        margin: 20px;
-        font-family: 'Noto Sans', sans-serif;
+    :root {
+        --bg-1: #eaeff8;
+        --bg-2: #dfe6f3;
+        --blob-1: rgba(88, 142, 255, .55);
+        --blob-2: rgba(176, 132, 255, .45);
+        --blob-3: rgba(72, 205, 200, .38);
+        --glass: rgba(255, 255, 255, .50);
+        --glass-strong: rgba(255, 255, 255, .78);
+        --glass-border: rgba(255, 255, 255, .70);
+        --hairline: rgba(17, 24, 39, .08);
+        --seg-bg: rgba(255, 255, 255, .45);
+        --text: #171a20;
+        --card-title: #000000;
+        --text-2: #3b414b;
+        --help-text: #23282f;
+        --log-text: #101216;
+        --brand-sub: #3f4753;
+        --code-text: #101216;
+        --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+        --muted: #6a7484;
+        --card-muted: #333a45;
+        --accent: #0a7cff;
+        --accent-weak: rgba(10, 124, 255, .12);
+        --code-bg: rgba(17, 24, 39, .06);
+        --shadow-card: 0 8px 28px rgba(23, 34, 56, .10);
+        --shadow-hover: 0 20px 48px rgba(23, 34, 56, .18);
+        --font: "HarmonyOS Sans SC Medium", "HarmonyOS Sans SC", "Microsoft YaHei UI",
+                "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
     }
 
-    header {
-        float: none !important;
+    html[data-theme="dark"] {
+        --bg-1: #1d222c;
+        --bg-2: #0e1016;
+        --blob-1: rgba(72, 132, 255, .78);
+        --blob-2: rgba(168, 100, 245, .30);
+        --blob-3: rgba(40, 205, 192, .18);
+        --glass: rgba(50, 57, 70, .38);
+        --glass-strong: rgba(46, 52, 63, .72);
+        --glass-border: rgba(255, 255, 255, .20);
+        --hairline: rgba(255, 255, 255, .09);
+        --seg-bg: rgba(255, 255, 255, .10);
+        --text: #f8fafd;
+        --card-title: #ffffff;
+        --text-2: #e5e9f1;
+        --help-text: #e5e9f1;
+        --log-text: #e5e9f1;
+        --brand-sub: #ccd3de;
+        --code-text: #ffffff;
+        --muted: #b6bfcd;
+        --card-muted: #dde3ec;
+        --accent: #4c9bff;
+        --accent-weak: rgba(76, 155, 255, .16);
+        --code-bg: rgba(255, 255, 255, .09);
+        --shadow-card: 0 10px 30px rgba(0, 0, 0, .38);
+        --shadow-hover: 0 24px 56px rgba(0, 0, 0, .55);
     }
 
-    /*plugin style*/
-    .macast-plugins {
-        display: flex;
-        flex-wrap: wrap;
+    @media (prefers-color-scheme: dark) {
+        html[data-theme="auto"] {
+            --bg-1: #1d222c;
+            --bg-2: #0e1016;
+            --blob-1: rgba(72, 132, 255, .78);
+            --blob-2: rgba(168, 100, 245, .30);
+            --blob-3: rgba(40, 205, 192, .18);
+            --glass: rgba(50, 57, 70, .38);
+            --glass-strong: rgba(46, 52, 63, .72);
+            --glass-border: rgba(255, 255, 255, .20);
+            --hairline: rgba(255, 255, 255, .09);
+            --seg-bg: rgba(255, 255, 255, .10);
+            --text: #f8fafd;
+        --card-title: #ffffff;
+            --text-2: #e5e9f1;
+        --help-text: #e5e9f1;
+        --log-text: #e5e9f1;
+        --brand-sub: #ccd3de;
+        --code-text: #ffffff;
+            --muted: #b6bfcd;
+        --card-muted: #dde3ec;
+            --accent: #4c9bff;
+            --accent-weak: rgba(76, 155, 255, .16);
+            --code-bg: rgba(255, 255, 255, .09);
+            --shadow-card: 0 10px 30px rgba(0, 0, 0, .38);
+            --shadow-hover: 0 24px 56px rgba(0, 0, 0, .55);
+        }
     }
 
-    .macast-plugin-name {
-        font-weight: bolder;
-        font-size: x-large;
+    * { box-sizing: border-box; }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        -webkit-font-smoothing: antialiased;
     }
 
-    .macast-plugin-content {
-        margin: 10px;
-        height: 100px;
+    html {
+        background: linear-gradient(165deg, var(--bg-1) 0%, var(--bg-2) 100%);
+        background-attachment: fixed;
     }
 
-    .macast-plugin-avatar {
-        display: flex;
-        align-items: center;
-        margin: 10px;
-    }
+    body { background: transparent; }
 
-    .macast-plugin-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 10px;
-    }
-
-    .macast-plugin-footer {
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .macast-plugin-install {
-        margin: 10px;
-        margin-right: 16px;
-    }
-
-    .macast-plugin-author {
-        margin-left: 8px;
-    }
-
-    .macast-plugin-repo {
-        width: 3rem;
-        height: 3rem;
-        position: fixed;
-        bottom: 1rem;
-        right: 1rem;
-        z-index: 9999;
-    }
-
-    .item {
-        margin-bottom: 18px;
-    }
-
-    .clearfix:before,
-    .clearfix:after {
-        display: table;
+    /* 背后放三团彩色雾，玻璃才有东西可透 */
+    body::before {
         content: "";
+        position: fixed;
+        inset: -15%;
+        z-index: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(44vw 44vw at 12% 6%, var(--blob-1), transparent 64%),
+            radial-gradient(40vw 40vw at 88% 10%, var(--blob-2), transparent 62%),
+            radial-gradient(48vw 48vw at 66% 92%, var(--blob-3), transparent 64%);
+        filter: blur(60px) saturate(130%);
     }
 
-    .clearfix:after {
-        clear: both
+    /* 极细噪点，压住渐变的塑料感 */
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        opacity: .45;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.05'/></svg>");
+    }
+
+    #app {
+        position: relative;
+        z-index: 1;
+        width: min(1560px, 94vw);
+        margin: 0 auto;
+        padding: 30px 0 80px;
+    }
+
+    /* ---------------- 顶部栏 ---------------- */
+    .macast-topbar {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 28px;
+    }
+    .macast-brand {
+        justify-self: start;
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -.02em;
+        color: var(--text);
+        white-space: nowrap;
+    }
+    .macast-brand span {
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--brand-sub);
+        margin-left: 13px;
+        letter-spacing: 0;
+    }
+
+    .macast-tabs,
+    .macast-theme {
+        display: inline-flex;
+        padding: 6px;
+        gap: 4px;
+        background: var(--seg-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 22px;
+        -webkit-backdrop-filter: blur(28px) saturate(190%);
+        backdrop-filter: blur(28px) saturate(190%);
+        box-shadow: 0 6px 20px rgba(23, 34, 56, .10),
+                    inset 0 1px 0 rgba(255, 255, 255, .45);
+    }
+    .macast-tabs { justify-self: center; }
+    .macast-theme { justify-self: end; }
+
+    .macast-tabs button,
+    .macast-theme button {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-family: var(--font);
+        font-size: 13.5px;
+        padding: 8px 18px;
+        border-radius: 16px;
+        cursor: pointer;
+        transition: background .18s, color .18s, box-shadow .18s, transform .12s;
+    }
+    .macast-tabs button { font-size: 15px; padding: 9px 22px; }
+    .macast-tabs button:hover,
+    .macast-theme button:hover {
+        color: var(--text);
+        background: var(--glass-strong);
+    }
+    .macast-tabs button:active,
+    .macast-theme button:active { transform: scale(.97); }
+
+    .macast-tabs button.on,
+    .macast-theme button.on {
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        box-shadow: 0 6px 18px rgba(10, 124, 255, .38),
+                    inset 0 1px 0 rgba(255, 255, 255, .28);
+    }
+
+    .macast-theme svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        opacity: .9;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---------------- 隐藏 element 自带标签头 ---------------- */
+    .el-tabs__header { display: none; }
+    .el-tabs__content { overflow: visible; }
+
+    /* ---------------- 插件列表 ---------------- */
+    .macast-plugins {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+        gap: 20px;
+        align-items: stretch;
     }
 
     .box-card {
-        width: 320px;
-        margin: 10px;
+        width: auto !important;
+        margin: 0 !important;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--glass-border) !important;
+        border-radius: 24px !important;
+        background: var(--glass) !important;
+        background-image: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 46%) !important;
+        -webkit-backdrop-filter: blur(34px) saturate(190%);
+        backdrop-filter: blur(34px) saturate(190%);
+        box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, .40) !important;
+        transition: box-shadow .22s ease, transform .22s ease, background .22s;
+        overflow: hidden;
+    }
+    .box-card:hover {
+        box-shadow: var(--shadow-hover), inset 0 1px 0 rgba(255, 255, 255, .55) !important;
+        transform: translateY(-3px);
+    }
+    .el-card__header {
+        border-bottom: 1px solid var(--hairline) !important;
+        padding: 19px 24px 15px !important;
+        background: transparent !important;
+        color: var(--text) !important;
+    }
+    .el-card__body {
+        padding: 16px 24px 18px !important;
+        color: var(--text-2) !important;
+        flex: 1;
     }
 
-    /*plugin style end*/
+    .macast-plugin-name {
+        font-size: 18.5px;
+        font-weight: 600;
+        letter-spacing: -.015em;
+        color: var(--card-title);
+    }
+    .macast-plugin-header {
+        margin-top: 8px;
+        font-size: 12.5px;
+        color: var(--card-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .macast-plugin-content {
+        margin: 0 0 16px !important;
+        min-height: 64px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--card-muted) !important;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .macast-plugin-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .macast-plugin-avatar { margin: 0 !important; }
+    .macast-plugin-author { margin-left: 9px; font-size: 13px; color: var(--card-muted); }
+    .macast-plugin-install { margin: 0 !important; }
 
+    .el-tag {
+        border-radius: 999px !important;
+        padding: 0 11px !important;
+        height: 22px !important;
+        line-height: 20px !important;
+        font-size: 11.5px !important;
+        background: transparent !important;
+        color: var(--accent) !important;
+        border-color: currentColor !important;
+    }
+    .el-avatar { background: rgba(128, 138, 158, .18); }
+
+    /* ---------------- 按钮 ---------------- */
+    .el-button {
+        border-radius: 999px;
+        font-family: var(--font);
+        font-weight: 500;
+        font-size: 14px;
+        border-color: var(--glass-border) !important;
+        background: var(--glass-strong) !important;
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        color: var(--text) !important;
+        transition: filter .15s, transform .1s, box-shadow .15s;
+    }
+    .el-button:hover {
+        filter: brightness(1.02);
+        box-shadow: 0 6px 18px rgba(23, 34, 56, .14);
+    }
+    .el-button:active { transform: scale(.98); }
+    .el-button.is-disabled, .el-button.is-disabled:hover {
+        background: var(--code-bg) !important;
+        border-color: transparent !important;
+        color: var(--muted) !important;
+        filter: none;
+        box-shadow: none;
+    }
+    .el-button.macast-primary {
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
+        color: #fff !important;
+        padding: 12px 30px;
+        box-shadow: 0 8px 22px rgba(10, 124, 255, .35),
+                    inset 0 1px 0 rgba(255, 255, 255, .28);
+    }
+    .el-button.macast-primary:hover { filter: brightness(1.06); }
+
+    .macast-plugin-repo {
+        position: fixed !important;
+        right: 26px;
+        bottom: 26px;
+        width: 48px !important;
+        height: 48px !important;
+        border-radius: 50% !important;
+        background: var(--glass-strong) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(190%);
+        backdrop-filter: blur(28px) saturate(190%);
+        color: var(--text) !important;
+        border: 1px solid var(--glass-border) !important;
+        box-shadow: 0 12px 30px rgba(23, 34, 56, .20) !important;
+        z-index: 999;
+    }
+
+    /* ---------------- 设置页 ---------------- */
+    .macast-settings { max-width: 100%; }
+    .macast-settings .el-textarea__inner {
+        height: 560px !important;
+        min-height: 560px !important;
+        resize: none;
+    }
+    .macast-settings-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 14px;
+        margin-top: 18px;
+    }
+    .macast-json-error { margin: 0; color: #ff453a; font-size: 13.5px; }
+
+    .el-textarea__inner {
+        border-radius: 22px !important;
+        border-color: var(--glass-border) !important;
+        background: var(--glass) !important;
+        -webkit-backdrop-filter: blur(30px) saturate(190%);
+        backdrop-filter: blur(30px) saturate(190%);
+        color: var(--code-text) !important;
+        padding: 18px 20px !important;
+        font-family: var(--font);
+        font-size: 16px;
+        line-height: 1.85;
+        box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, .40) !important;
+    }
+    .el-textarea__inner:focus { border-color: var(--accent) !important; }
+
+    /* ---------------- 帮助页排版 ---------------- */
+    .macast-help { max-width: 1180px; }
+    h1 { font-size: 30px; font-weight: 600; margin: 4px 0 18px; letter-spacing: -.015em; }
+    h2 { font-size: 20.5px; font-weight: 600; margin: 30px 0 10px; }
+    p, li { font-size: 17.5px; line-height: 1.85; color: var(--help-text); text-wrap: pretty; }
+    ul, ol { padding-left: 24px; }
+    li { margin: 6px 0; }
+    code {
+        background: var(--code-bg);
+        padding: 2px 7px;
+        border-radius: 8px;
+        font-family: var(--mono);
+        font-size: 15.5px;
+        color: var(--text);
+    }
+    pre {
+        background: var(--code-bg);
+        padding: 15px 17px;
+        border-radius: 16px;
+        overflow: auto;
+    }
+    pre code { background: none; padding: 0; }
+    figure { margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 16.5px; }
+    th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--hairline); }
+    th { color: var(--muted); font-weight: 500; }
+    strong { font-weight: 600; color: var(--text); }
+
+    /* ---------------- 日志页 ---------------- */
+    .macast-log {
+        font-size: 17px;
+        line-height: 1.8;
+        color: var(--log-text);
+        word-break: break-all;
+    }
+
+    /* ---------------- 滚动条 ---------------- */
+    ::-webkit-scrollbar { width: 11px; height: 11px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+        background: rgba(120, 128, 140, .35);
+        border-radius: 999px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(120, 128, 140, .55); background-clip: content-box; }
+
+    /* ---------------- 收尾 ---------------- */
+    .item { margin-bottom: 18px; }
+    .clearfix:before, .clearfix:after { display: table; content: ""; }
+    .clearfix:after { clear: both; }
+    .footer { height: 8px; }
+
+    @media (max-width: 1080px) {
+        .macast-topbar {
+            grid-template-columns: 1fr;
+            justify-items: start;
+            gap: 12px;
+        }
+        .macast-tabs, .macast-theme { justify-self: start; }
+    }
+
+    @media (max-width: 720px) {
+        #app { width: 94vw; padding-top: 20px; }
+        .macast-plugins { grid-template-columns: 1fr; }
+        .macast-brand { font-size: 17px; }
+        .macast-brand span { display: none; }
+        .macast-tabs button { padding: 8px 14px; font-size: 13.5px; }
+        .macast-theme button { padding: 7px 11px; font-size: 12.5px; }
+    }
 
 </style>
+
+<script>
+    (function () {
+        var KEY = 'macast-ui-theme';
+        var root = document.documentElement;
+
+        function apply(v) {
+            root.setAttribute('data-theme', v);
+            var list = document.querySelectorAll('#theme-switch button');
+            for (var i = 0; i < list.length; i++) {
+                list[i].classList.toggle('on', list[i].getAttribute('data-theme-value') === v);
+            }
+        }
+
+        var saved = 'auto';
+        try { saved = localStorage.getItem(KEY) || 'auto'; } catch (e) {}
+        var q = (location.search.match(/[?&]theme=(auto|light|dark)/) || [])[1];
+        if (q) { saved = q; }
+        apply(saved);
+
+        var buttons = document.querySelectorAll('#theme-switch button');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].addEventListener('click', function () {
+                var v = this.getAttribute('data-theme-value');
+                try { localStorage.setItem(KEY, v); } catch (e) {}
+                apply(v);
+            });
+        }
+    })();
+</script>
 
 </body>
 </html>
