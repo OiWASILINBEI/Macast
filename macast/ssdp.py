@@ -61,6 +61,19 @@ class SSDPServer:
     datagram is received by the server."""
     known = {}
 
+    @staticmethod
+    def _has_local_ip(target):
+        """本机是否真有这个 IPv4 地址（用于判断移动热点是否开着）。"""
+        try:
+            import psutil
+            for snics in psutil.net_if_addrs().values():
+                for snic in snics:
+                    if snic.family == socket.AF_INET and snic.address == target:
+                        return True
+        except Exception as e:
+            logger.debug('check local ip failed: {}'.format(e))
+        return False
+
     def __init__(self):
         self.ip_list = []
         self.sock_list = []
@@ -125,7 +138,11 @@ class SSDPServer:
 
         self.ip_list = list(Setting.get_ip())
         if sys.platform == 'win32':
-            self.ip_list.append(('192.168.137.1', '255.255.255.0'))
+            # 192.168.137.1 是 Windows 移动热点的固定地址。原版无条件加入，
+            # 没开热点时会反复报 WinError 10049（地址无效）刷满日志。
+            # 先确认本机真有这个地址再追加，功能不变。
+            if self._has_local_ip('192.168.137.1'):
+                self.ip_list.append(('192.168.137.1', '255.255.255.0'))
         self.sock_list = []
         for ip, mask in self.ip_list:
             try:
