@@ -14,9 +14,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: pygettext.py 1.5\n"
 "X-Generator: Poedit 3.0\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
 
 msgid "Stop Cast"
 msgstr "停止接受投屏"
@@ -176,3 +176,18 @@ msgstr "检查更新"
 
 msgid "New Update {}"
 msgstr "有新版本 {}"
+
+msgid "Menu Theme"
+msgstr "菜单主题"
+
+msgid "Follow System"
+msgstr "跟随系统"
+
+msgid "Dark"
+msgstr "深色"
+
+msgid "Light"
+msgstr "浅色"
+
+msgid "Source mode: this only takes effect after packaging."
+msgstr "源码模式：打包成 exe 后才会真正生效"
